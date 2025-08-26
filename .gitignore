@@ -1,0 +1,30 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local databases and data
+*.db
+*.sqlite3
+*.db-journal
+chroma/
+rules.txt
+
+# Environment variables
+.env
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/

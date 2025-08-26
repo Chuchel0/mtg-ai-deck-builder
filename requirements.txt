@@ -1,0 +1,22 @@
+# Backend Framework
+fastapi
+uvicorn[standard]
+
+# Database
+sqlalchemy
+sqlmodel
+
+# Frontend
+streamlit
+
+# APIs and Utilities
+requests
+tenacity
+python-dotenv
+
+# AI / RAG
+chromadb
+sentence-transformers
+
+# Testing
+pytest
