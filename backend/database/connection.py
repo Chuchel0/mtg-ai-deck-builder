@@ -1,37 +1,35 @@
+"""
+Database connection and session management.
+
+This module configures the application's database engine and provides a
+function to initialize the database schema based on the defined SQLModels.
+"""
+
 from pathlib import Path
 from sqlmodel import SQLModel, create_engine
+from . import models  # noqa: F401 - Ensures models are registered with SQLModel metadata
 
-# Import the models file so that SQLModel knows about the tables.
-from . import models  # noqa: F401
-
-# Define the path for the SQLite database file.
-# It is placed in the `data` directory at the project root.
-# Path(__file__) is the path to this connection.py file.
+# --- Database Configuration ---
+# Construct an absolute path to the database file within the project's /data directory.
+# This approach ensures the path is correct regardless of where the application is run from.
 DB_FILE = Path(__file__).parent.parent.parent / "data" / "mtg_collection.db"
-DB_FILE.parent.mkdir(exist_ok=True) # Ensure the 'data' directory exists
-
-# The database URL for SQLite.
-# The format is 'sqlite:///path/to/your/database.db'
 DATABASE_URL = f"sqlite:///{DB_FILE.resolve()}"
+# --- End Configuration ---
 
-# The engine is the core interface to the database.
-# This engine is used in other parts of application to interact with the DB.
-# connect_args is specific to SQLite to allow multiple threads to access it,
-# which is necessary for FastAPI's asynchronous nature.
+# The database engine is the central access point to the database.
+# - `echo=True` logs all generated SQL statements, which is useful for debugging.
+#   This should be set to `False` in a production environment.
+# - `connect_args` is required for SQLite to allow the database connection
+#   to be shared across multiple threads, which is necessary for FastAPI.
 engine = create_engine(DATABASE_URL, echo=True, connect_args={"check_same_thread": False})
-
 
 def create_db_and_tables():
     """
-    Initializes the database and creates all tables.
-    This function should be called once when the application starts.
+    Initializes the database by creating all tables defined by SQLModel classes.
+
+    This function is idempotent; it will not attempt to recreate tables that
+    already exist in the database. It should be called once on application startup.
     """
-    print("Initializing database...")
-    print(f"Database will be created at: {DATABASE_URL}")
-    
-    # SQLModel.metadata.create_all() inspects all the classes that inherit from
-    # SQLModel and creates the corresponding tables in the database.
-    # It will not recreate tables that already exist.
+    print(f"Initializing database at: {DATABASE_URL}")
     SQLModel.metadata.create_all(engine)
-    
-    print("Database initialization complete.")
+    print("Database tables created or verified successfully.")
