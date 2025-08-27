@@ -17,6 +17,7 @@ python-dotenv
 # AI / RAG
 chromadb
 sentence-transformers
+openai
 
 # Testing
 pytest

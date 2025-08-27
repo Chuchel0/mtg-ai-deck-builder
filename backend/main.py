@@ -11,7 +11,26 @@ from fastapi import FastAPI, APIRouter
 # --- Application Service Imports ---
 from .database.connection import create_db_and_tables
 from .services.rag_retriever import rag_retriever
+from .services.llm_provider import llm_provider  # Import the new LLM provider
 from .api_models import ChatRequest, ChatResponse, RuleSnippet
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+# This system prompt defines the persona and instructions for the LLM.
+SYSTEM_PROMPT = """You are an expert Magic: The Gathering judge and deckbuilding assistant. Your persona is helpful, clear, and precise.
+
+Your primary function is to answer user questions about MTG rules.
+
+**Instructions:**
+1.  Use the "RELEVANT RULES" provided below as the absolute source of truth. Do not use any prior knowledge.
+2.  Answer the user's question directly and concisely based *only* on the provided rules.
+3.  For every piece of information you provide, you **MUST** end the sentence with a citation of the exact rule number it came from.
+4.  The citation format is a rule number in square brackets, like this: `[702.19b]`.
+5.  If the provided rules do not contain enough information to answer the question, you must explicitly say: "Based on the provided rules, I cannot answer that question with certainty."
+6.  Do not add any conversational fluff or introductory phrases like "According to the rules...". Answer the question directly.
+"""
 
 # =============================================================================
 # Lifespan Management
@@ -19,9 +38,7 @@ from .api_models import ChatRequest, ChatResponse, RuleSnippet
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    An asynchronous context manager to handle application startup and shutdown events.-
-    """
+    """An asynchronous context manager to handle application startup and shutdown events."""
     print("Application startup: Initializing database...")
     create_db_and_tables()
     print("Database initialization complete.")
@@ -34,8 +51,6 @@ async def lifespan(app: FastAPI):
 # API Router Definition
 # =============================================================================
 
-# Using an APIRouter helps organize endpoints, especially as the application grows.
-# All endpoints defined on this router will be prefixed with `/api/v1`.
 router = APIRouter(
     prefix="/api/v1",
     tags=["Deckbuilding & Chat"]
@@ -44,30 +59,36 @@ router = APIRouter(
 @router.post("/chat", response_model=ChatResponse)
 async def handle_chat(request: ChatRequest):
     """
-    Handles an incoming chat message.
+    Handles an incoming chat message, generates a response using a RAG-enhanced LLM.
 
-    This endpoint performs a RAG query to find relevant rules based on the user's
-    message and returns them. The actual LLM-based response generation is a
-    placeholder for now.
+    This endpoint orchestrates the full RAG pipeline:
+    1. Retrieves relevant rule documents from the ChromaDB vector store.
+    2. Constructs a detailed prompt including the user's message and the retrieved context.
+    3. Sends the prompt to a local LLM via the LLMProvider to generate a response.
+    4. Returns the generated response along with the source rule snippets for citation.
     """
     print(f"Handling chat request. Message: '{request.message}'")
 
-    # 1. Retrieve relevant rules from the vector database.
+    # 1. Retrieve relevant rule documents.
     retrieved_docs = rag_retriever.query(query_text=request.message, top_k=5)
+    
+    # Extract the text from the retrieved documents for the LLM context.
+    context_rules_text = [doc.text for doc in retrieved_docs]
+    
+    # 2. Generate a context-aware response from the LLM.
+    assistant_response = llm_provider.generate_response(
+        system_prompt=SYSTEM_PROMPT,
+        user_message=request.message,
+        context_rules=context_rules_text
+    )
 
-    # 2. Format the retrieved documents into the API response model.
+    # 3. Format the retrieved documents for the API response.
     rule_snippets = [
         RuleSnippet(rule_id=doc.rule_id, text=doc.text) for doc in retrieved_docs
     ]
 
-    # 3. Create a placeholder response. The LLM integration will replace this.
-    placeholder_response = (
-        "I am a rule-lookup assistant. I am not yet connected to a large language model. "
-        "Based on your query, I found the following potentially relevant rules:"
-    )
-
     return ChatResponse(
-        assistant_message=placeholder_response,
+        assistant_message=assistant_response,
         retrieved_rules=rule_snippets
     )
 
@@ -82,7 +103,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Include the defined router in the main application.
 app.include_router(router)
 
 @app.get("/health", tags=["Status"])
