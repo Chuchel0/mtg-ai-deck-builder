@@ -44,6 +44,10 @@ class ScryfallCardCache(SQLModel, table=True):
     set_code: str
     collector_number: str
 
+    # --- NEW Fields for Card Quality ---
+    edhrec_rank: Optional[int] = None
+    price_usd: Optional[float] = None
+
 class UserCard(SQLModel, table=True):
     """
     Represents a card within a user's uploaded collection.

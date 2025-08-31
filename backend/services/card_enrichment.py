@@ -1,13 +1,6 @@
 """
 Service layer for enriching card data with a database caching mechanism.
-
-This service acts as an intermediary between the application and the Scryfall
-client. It implements a read-through cache: before making an API call, it first
-checks if the requested card data is already stored in the local database. If so,
-it returns the cached data; otherwise, it fetches from the API, stores the result,
-and then returns it.
 """
-
 import uuid
 from typing import Optional
 from sqlmodel import Session, select
@@ -20,20 +13,7 @@ def get_or_create_scryfall_card(
     set_code: Optional[str] = None, 
     db_session: Optional[Session] = None
 ) -> Optional[ScryfallCardCache]:
-    """
-    Retrieves a card's data, utilizing a read-through database cache.
-
-    This function can be called with an existing database session or it will create
-    its own, making it flexible for use in different contexts.
-
-    Args:
-        card_name: The name of the card.
-        set_code: The optional set code for a specific printing.
-        db_session: An optional existing SQLModel Session to use.
-
-    Returns:
-        A `ScryfallCardCache` ORM instance if the card is found, else `None`.
-    """
+    """Retrieves a card's data, utilizing a read-through database cache."""
     if db_session:
         return _get_or_create(card_name, set_code, db_session)
     else:
@@ -46,50 +26,60 @@ def _get_or_create(
     session: Session
 ) -> Optional[ScryfallCardCache]:
     """Core caching logic that requires an active database session."""
-    # 1. Read from cache
     statement = select(ScryfallCardCache).where(ScryfallCardCache.name == card_name)
     if set_code:
         statement = statement.where(ScryfallCardCache.set_code == set_code)
     
     cached_card = session.exec(statement).first()
     if cached_card:
-        print(f"CACHE HIT: Found '{card_name}' in local database.")
-        return cached_card
+        # --- NEW: Check if the cached card has our new quality data ---
+        # If not, we'll proceed to fetch it. This allows for graceful upgrades.
+        if cached_card.edhrec_rank is not None:
+            print(f"CACHE HIT: Found '{card_name}' in local database.")
+            return cached_card
+        print(f"CACHE UPDATE: Found '{card_name}' but missing quality metrics. Refetching.")
 
-    # 2. Fetch from API on cache miss
-    print(f"CACHE MISS: Querying Scryfall API for '{card_name}'.")
     scryfall_card_data = scryfall_client.get_card_by_name(card_name, set_code)
     if not scryfall_card_data:
         return None
 
-    # 3. Write to cache and return
-    db_card = _convert_scryfall_to_db_model(scryfall_card_data)
+    # If we are updating an existing entry, use the one we found.
+    # Otherwise, create a new one.
+    db_card = cached_card or _convert_scryfall_to_db_model(scryfall_card_data)
+    
+    # Update the fields with the latest data
+    _update_db_model_from_scryfall(db_card, scryfall_card_data)
     
     session.add(db_card)
     session.commit()
     session.refresh(db_card)
     
-    print(f"CACHE WRITE: Saved '{db_card.name}' ({db_card.set_code.upper()}) to cache.")
+    print(f"CACHE WRITE/UPDATE: Saved '{db_card.name}' ({db_card.set_code.upper()}) to cache.")
     return db_card
 
 def _convert_scryfall_to_db_model(scryfall_card: ScryfallCard) -> ScryfallCardCache:
-    """Maps a ScryfallCard Pydantic model to a ScryfallCardCache SQLModel."""
-    image_uris_dict = {k: str(v) for k, v in scryfall_card.image_uris.items()} if scryfall_card.image_uris else None
+    """Helper function to map Scryfall API data to our database schema for a new card."""
+    return ScryfallCardCache(id=uuid.UUID(scryfall_card.id))
 
-    return ScryfallCardCache(
-        id=uuid.UUID(scryfall_card.id),
-        name=scryfall_card.name,
-        oracle_text=scryfall_card.oracle_text,
-        type_line=scryfall_card.type_line,
-        mana_cost=scryfall_card.mana_cost,
-        cmc=scryfall_card.cmc,
-        rarity=scryfall_card.rarity,
-        layout=scryfall_card.layout,
-        colors=scryfall_card.colors,
-        color_identity=scryfall_card.color_identity,
-        keywords=scryfall_card.keywords,
-        legalities=scryfall_card.legalities,
-        image_uris=image_uris_dict,
-        set_code=scryfall_card.set,
-        collector_number=scryfall_card.collector_number,
-    )
+def _update_db_model_from_scryfall(db_card: ScryfallCardCache, scryfall_card: ScryfallCard):
+    """Updates a ScryfallCardCache instance with fresh data from a ScryfallCard model."""
+    image_uris_dict = {k: str(v) for k, v in scryfall_card.image_uris.items()} if scryfall_card.image_uris else None
+    
+    db_card.name = scryfall_card.name
+    db_card.oracle_text = scryfall_card.oracle_text
+    db_card.type_line = scryfall_card.type_line
+    db_card.mana_cost = scryfall_card.mana_cost
+    db_card.cmc = scryfall_card.cmc
+    db_card.rarity = scryfall_card.rarity
+    db_card.layout = scryfall_card.layout
+    db_card.colors = scryfall_card.colors
+    db_card.color_identity = scryfall_card.color_identity
+    db_card.keywords = scryfall_card.keywords
+    db_card.legalities = scryfall_card.legalities
+    db_card.image_uris = image_uris_dict
+    db_card.set_code = scryfall_card.set
+    db_card.collector_number = scryfall_card.collector_number
+    
+    # --- NEW: Populate card quality metrics ---
+    db_card.edhrec_rank = scryfall_card.edhrec_rank
+    db_card.price_usd = scryfall_card.prices.get("usd") if scryfall_card.prices else None

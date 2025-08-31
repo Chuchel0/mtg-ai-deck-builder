@@ -1,55 +1,69 @@
 """
 Pydantic models for API request and response validation.
-
-This module defines the data structures used to validate the incoming request
-bodies and to serialize the outgoing responses for the FastAPI endpoints.
-Using Pydantic models ensures type safety, provides automatic data validation,
-and is used by FastAPI to generate OpenAPI documentation.
 """
-
-from typing import List, Optional
+from typing import List, Optional, Set, Dict
 from pydantic import BaseModel, Field
 
-# --- Chat Endpoint Models ---
+# =============================================================================
+# API-facing Deck Building Models
+# =============================================================================
+
+class DeckSpec(BaseModel):
+    """
+    Defines the user's desired deck specifications (the 'blueprint').
+    This is the input for the deck building engine.
+    """
+    format: str = Field("commander", examples=["commander", "modern", "standard"])
+    color_identity: Set[str] = Field(..., examples=[{"W", "B"}, {"G"}])
+    target_creatures: int = Field(25, ge=0)
+    target_removal: int = Field(10, ge=0)
+    target_ramp: int = Field(10, ge=0)
+    target_draw: int = Field(8, ge=0)
+    target_board_wipes: int = Field(2, ge=0)
+    target_lands: int = Field(37, ge=0)
+
+class Decklist(BaseModel):
+    """
+
+    Represents the final, constructed deck.
+    This is the output of the deck building engine.
+    """
+    main_deck: Dict[str, int] # Card Name -> Quantity
+    sideboard: Dict[str, int]
+    message: str
+
+class BuildDeckRequest(BaseModel):
+    """Defines the structure for a request to the /decks/build endpoint."""
+    collection_id: str
+    spec: DeckSpec
+
+class GenerateSpecRequest(BaseModel):
+    """Defines the structure for a request to generate a deck spec."""
+    chat_history: List[Dict[str, str]] # e.g., [{"role": "user", "content": "..."}, ...]
+    collection_id: str
+
+# =============================================================================
+# AI and Collection Models
+# =============================================================================
 
 class ChatRequest(BaseModel):
-    """Defines the structure for a request to the /chat endpoint."""
-    collection_id: Optional[str] = Field(
-        None,
-        description="The unique ID of the user's collection, if available.",
-        examples=["a1b2c3d4-e5f6-7890-1234-567890abcdef"]
-    )
-    message: str = Field(
-        ...,
-        description="The user's message or query.",
-        min_length=1,
-        examples=["what is haste?"]
-    )
-    # This field will be expanded later to include conversation history.
-    # history: List[Dict[str, str]] = []
+    """Defines the structure for a rule search request."""
+    collection_id: Optional[str] = None
+    message: str = Field(..., min_length=1)
 
 class RuleSnippet(BaseModel):
-    """Represents a single, relevant rule snippet returned by the RAG system."""
-    rule_id: str = Field(..., description="The ID of the rule, e.g., '702.10a'.")
-    text: str = Field(..., description="The text of the rule.")
+    """Represents a single, relevant rule snippet."""
+    rule_id: str
+    text: str
 
 class ChatResponse(BaseModel):
-    """Defines the structure for a response from the /chat endpoint."""
-    assistant_message: str = Field(
-        ...,
-        description="The text response from the AI assistant."
-    )
-    retrieved_rules: List[RuleSnippet] = Field(
-        ...,
-        description="A list of relevant rule snippets retrieved by the RAG system."
-    )
-
-# --- Collection Endpoint Models ---
-# The models can be pre-define for the upcoming CSV upload endpoint.
+    """Defines the structure for a response that includes an AI message."""
+    assistant_message: str
+    retrieved_rules: List[RuleSnippet]
 
 class CollectionResponse(BaseModel):
-    """Defines the response structure after a collection has been uploaded and processed."""
-    collection_id: str = Field(..., description="The newly created unique ID for the collection.")
-    message: str = Field(..., description="A summary message of the ingestion result.")
+    """Defines the response structure after a collection has been uploaded."""
+    collection_id: str
+    message: str
     total_rows: int
     successful_rows: int

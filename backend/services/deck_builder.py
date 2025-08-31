@@ -14,21 +14,22 @@ from sqlmodel import Session, select
 
 from ..database.connection import engine
 from ..database.models import UserCard, ScryfallCardCache
+from ..api_models import DeckSpec, Decklist
 
 # =============================================================================
 # Data Models
 # =============================================================================
 
-class DeckSpec(BaseModel):
-    """Defines the user's desired deck specifications (the 'blueprint')."""
-    format: str = "commander"
-    color_identity: Set[str] = {'W', 'B'}
-    target_creatures: int = 25
-    target_removal: int = 10
-    target_ramp: int = 10
-    target_draw: int = 8
-    target_board_wipes: int = 2 # New target for our expanded roles
-    target_lands: int = 37
+# class DeckSpec(BaseModel):
+#     """Defines the user's desired deck specifications (the 'blueprint')."""
+#     format: str = "commander"
+#     color_identity: Set[str] = {'W', 'B'}
+#     target_creatures: int = 25
+#     target_removal: int = 10
+#     target_ramp: int = 10
+#     target_draw: int = 8
+#     target_board_wipes: int = 2 # New target for our expanded roles
+#     target_lands: int = 37
 
 class AnalyzedCard(BaseModel):
     """A richer representation of a card for deck building."""
@@ -42,11 +43,11 @@ class AnalyzedCard(BaseModel):
     mana_value: float
     roles: List[str] = []
 
-class Decklist(BaseModel):
-    """Represents the final, constructed deck."""
-    main_deck: Dict[str, int]
-    sideboard: Dict[str, int]
-    message: str
+# class Decklist(BaseModel):
+#     """Represents the final, constructed deck."""
+#     main_deck: Dict[str, int]
+#     sideboard: Dict[str, int]
+#     message: str
 
 class DeckConstruction:
     """A stateful class to manage the deck building process."""

@@ -1,6 +1,7 @@
 # Backend Framework
 fastapi
 uvicorn[standard]
+python-multipart
 
 # Database
 sqlalchemy
@@ -17,7 +18,8 @@ python-dotenv
 # AI / RAG
 chromadb
 sentence-transformers
-openai
+openai # Still needed for Ollama
+azure-ai-inference # NEW: The correct SDK for GitHub Models
 
 # Testing
 pytest

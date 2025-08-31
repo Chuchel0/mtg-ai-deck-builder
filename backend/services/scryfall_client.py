@@ -48,6 +48,8 @@ class ScryfallCard(BaseModel):
     layout: str
     image_uris: Optional[Dict[str, HttpUrl]] = None
     card_faces: Optional[List[ScryfallCardFace]] = None
+    edhrec_rank: Optional[int] = None
+    prices: Optional[Dict[str, Optional[str]]] = None
 
 # --- API Client ---
 
